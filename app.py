@@ -15,10 +15,10 @@ from core.parser import parse_pcap
 from core.flows import reconstruct_flows
 from core.ai_detection import detect_suspicious
 from core.geoip_locator import locate_ips
-from core.timeline import build_timeline
 from core.graph_builder import build_graph
 from core.packet_capture import capture_packets
 from core.message_hashes import extract_message_hashes
+from core.vpn_detector import detect_vpn
 
 
 # -----------------------------
@@ -133,8 +133,6 @@ mode = st.sidebar.radio(
     ["Upload PCAP", "Live Capture"]
 )
 
-message_hashes = []
-
 
 # =====================================================
 # PCAP FILE ANALYSIS MODE
@@ -172,10 +170,14 @@ if mode == "Upload PCAP":
 
             df = df.head(50000)
 
-            # Extract message hashes
+            # -----------------------------
+            # MESSAGE HASHES
+            # -----------------------------
             message_hashes = extract_message_hashes(df)
 
-            # DNS resolution
+            # -----------------------------
+            # DNS RESOLUTION
+            # -----------------------------
             if "dst_ip" in df.columns:
 
                 unique_ips = df["dst_ip"].dropna().unique()
@@ -187,20 +189,40 @@ if mode == "Upload PCAP":
             else:
                 df["dst_domain"] = "Unknown"
 
+            # -----------------------------
+            # ANALYSIS PIPELINE
+            # -----------------------------
             flows = reconstruct_flows(df)
 
             suspicious = detect_suspicious(df)
 
             locations = locate_ips(df)
 
-            timeline = build_timeline(df)
+            vpn_results = detect_vpn(df)
 
             G = build_graph(df)
 
+        # -----------------------------
+        # DASHBOARD
+        # -----------------------------
         show_metrics(df, suspicious)
 
-        show_dashboard(df, flows, suspicious, locations, timeline, G, message_hashes)
+        show_dashboard(df, flows, suspicious, locations, None, G, message_hashes)
 
+        # -----------------------------
+        # VPN DETECTION
+        # -----------------------------
+        st.subheader("VPN Detection")
+
+        if vpn_results:
+            vpn_df = pd.DataFrame(vpn_results)
+            st.dataframe(vpn_df)
+        else:
+            st.success("No VPN gateway detected.")
+
+        # -----------------------------
+        # REPORT
+        # -----------------------------
         show_report_section(df, suspicious)
 
 
@@ -209,9 +231,17 @@ if mode == "Upload PCAP":
 # =====================================================
 elif mode == "Live Capture":
 
-    interface = st.sidebar.text_input("Network Interface", "Wi-Fi")
+    interface = st.sidebar.text_input(
+        "Network Interface",
+        "Wi-Fi"
+    )
 
-    packet_count = st.sidebar.slider("Number of Packets to Capture", 50, 1000, 200)
+    packet_count = st.sidebar.slider(
+        "Number of Packets to Capture",
+        50,
+        1000,
+        200
+    )
 
     if st.sidebar.button("Start Capture"):
 
@@ -231,7 +261,6 @@ elif mode == "Live Capture":
 
             df = df.head(50000)
 
-            # Extract hashes
             message_hashes = extract_message_hashes(df)
 
             if "dst_ip" in df.columns:
@@ -251,13 +280,20 @@ elif mode == "Live Capture":
 
             locations = locate_ips(df)
 
-            timeline = build_timeline(df)
+            vpn_results = detect_vpn(df)
 
             G = build_graph(df)
 
         show_metrics(df, suspicious)
 
-        show_dashboard(df, flows, suspicious, locations, timeline, G, message_hashes)
+        show_dashboard(df, flows, suspicious, locations, None, G, message_hashes)
+
+        st.subheader("VPN Detection")
+
+        if vpn_results:
+            vpn_df = pd.DataFrame(vpn_results)
+            st.dataframe(vpn_df)
+        else:
+            st.success("No VPN gateway detected.")
 
         show_report_section(df, suspicious)
-    
