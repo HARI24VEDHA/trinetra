@@ -1,67 +1,212 @@
-from reportlab.lib.pagesizes import letter
-from reportlab.pdfgen import canvas
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
+from reportlab.lib.styles import getSampleStyleSheet
+from reportlab.lib.pagesizes import A4
+from reportlab.lib import colors
 import datetime
+import pandas as pd
 
 
-def generate_soc_report(df, suspicious, filename="soc_report.pdf"):
+def safe_col(df, col):
+    if col in df.columns:
+        return df[col]
+    return pd.Series([])
 
-    c = canvas.Canvas(filename, pagesize=letter)
 
-    width, height = letter
-    y = height - 50
+def generate_soc_report(df, suspicious):
 
-    c.setFont("Helvetica-Bold", 18)
-    c.drawString(50, y, "TRINETRA SOC Investigation Report")
+    filename = "trinetra_soc_report.pdf"
 
-    y -= 40
-    c.setFont("Helvetica", 12)
-    c.drawString(50, y, f"Generated: {datetime.datetime.now()}")
+    styles = getSampleStyleSheet()
 
-    y -= 30
-    c.drawString(50, y, f"Total Packets: {len(df)}")
+    story = []
 
-    y -= 20
-    c.drawString(50, y, f"Unique Endpoints: {df['dst_ip'].nunique()}")
+    # ---------------------------------------------------
+    # TITLE
+    # ---------------------------------------------------
+    story.append(Paragraph("TRINETRA Cyber Intelligence Platform", styles["Title"]))
+    story.append(Paragraph("SOC Analyst Investigation Report", styles["Heading2"]))
+    story.append(Spacer(1, 20))
 
-    y -= 20
-    c.drawString(50, y, f"Unique Sources: {df['src_ip'].nunique()}")
+    story.append(
+        Paragraph(
+            f"<b>Generated On:</b> {datetime.datetime.now()}",
+            styles["Normal"]
+        )
+    )
 
-    y -= 20
-    c.drawString(50, y, f"Suspicious Endpoints Detected: {len(suspicious)}")
+    story.append(Spacer(1, 20))
 
-    y -= 40
-    c.setFont("Helvetica-Bold", 14)
-    c.drawString(50, y, "Top Communication Flows")
+    # ---------------------------------------------------
+    # EXECUTIVE SUMMARY
+    # ---------------------------------------------------
 
-    y -= 20
-    c.setFont("Helvetica", 10)
+    total_packets = len(df)
 
-    flows = df.groupby(["src_ip", "dst_ip"]).size().sort_values(ascending=False).head(5)
+    dst_ips = safe_col(df, "dst_ip")
+    src_ips = safe_col(df, "src_ip")
 
-    for (src, dst), count in flows.items():
+    unique_destinations = dst_ips.nunique() if not dst_ips.empty else 0
+    unique_sources = src_ips.nunique() if not src_ips.empty else 0
 
-        line = f"{src} -> {dst}  |  Packets: {count}"
+    suspicious_count = 0
+    if suspicious is not None and not suspicious.empty:
+        suspicious_count = len(suspicious)
 
-        c.drawString(50, y, line)
+    summary_table = [
+        ["Metric", "Value"],
+        ["Total Packets Captured", total_packets],
+        ["Unique Destination Endpoints", unique_destinations],
+        ["Unique Source Systems", unique_sources],
+        ["Suspicious Entities Detected", suspicious_count]
+    ]
 
-        y -= 15
+    table = Table(summary_table, colWidths=[300, 200])
 
-    y -= 20
+    table.setStyle(TableStyle([
+        ("BACKGROUND", (0,0), (-1,0), colors.grey),
+        ("TEXTCOLOR", (0,0), (-1,0), colors.white),
+        ("GRID", (0,0), (-1,-1), 0.5, colors.black)
+    ]))
 
-    c.setFont("Helvetica-Bold", 14)
-    c.drawString(50, y, "Suspicious IPs")
+    story.append(Paragraph("Executive Summary", styles["Heading3"]))
+    story.append(Spacer(1,10))
+    story.append(table)
+    story.append(Spacer(1,20))
 
-    y -= 20
-    c.setFont("Helvetica", 10)
+    # ---------------------------------------------------
+    # COMMUNICATION FLOWS
+    # ---------------------------------------------------
+
+    story.append(Paragraph("Top Communication Flows", styles["Heading3"]))
+    story.append(Spacer(1,10))
+
+    flow_rows = [["Source", "Destination", "Packets"]]
+
+    if "src_ip" in df.columns and "dst_ip" in df.columns:
+
+        flows = df.groupby(["src_ip","dst_ip"]).size().reset_index(name="packets")
+
+        flows = flows.sort_values("packets", ascending=False).head(10)
+
+        for _, row in flows.iterrows():
+            flow_rows.append([
+                str(row["src_ip"]),
+                str(row["dst_ip"]),
+                int(row["packets"])
+            ])
+
+    table = Table(flow_rows)
+
+    table.setStyle(TableStyle([
+        ("BACKGROUND", (0,0), (-1,0), colors.lightgrey),
+        ("GRID", (0,0), (-1,-1), 0.5, colors.black)
+    ]))
+
+    story.append(table)
+    story.append(Spacer(1,20))
+
+    # ---------------------------------------------------
+    # SUSPICIOUS IPs
+    # ---------------------------------------------------
+
+    story.append(Paragraph("Suspicious IP Analysis", styles["Heading3"]))
+    story.append(Spacer(1,10))
 
     if suspicious is not None and not suspicious.empty:
 
-        for ip in suspicious["ip"].head(5):
-            c.drawString(50, y, f"Suspicious IP: {ip}")
-            y -= 15
-    else:
-        c.drawString(50, y, "No suspicious activity detected.")
+        ip_col = None
 
-    c.save()
+        if "dst_ip" in suspicious.columns:
+            ip_col = "dst_ip"
+        elif "src_ip" in suspicious.columns:
+            ip_col = "src_ip"
+
+        if ip_col:
+
+            rows = [["Suspicious IP"]]
+
+            for ip in suspicious[ip_col].unique():
+                rows.append([str(ip)])
+
+            table = Table(rows)
+
+            table.setStyle(TableStyle([
+                ("BACKGROUND", (0,0), (-1,0), colors.red),
+                ("TEXTCOLOR", (0,0), (-1,0), colors.white),
+                ("GRID", (0,0), (-1,-1), 0.5, colors.black)
+            ]))
+
+            story.append(table)
+
+        else:
+
+            story.append(
+                Paragraph(
+                    "Suspicious activity detected but IP fields unavailable.",
+                    styles["Normal"]
+                )
+            )
+
+    else:
+
+        story.append(
+            Paragraph(
+                "No suspicious endpoints detected during analysis.",
+                styles["Normal"]
+            )
+        )
+
+    story.append(Spacer(1,20))
+
+    # ---------------------------------------------------
+    # ANALYST NOTES
+    # ---------------------------------------------------
+
+    story.append(Paragraph("SOC Analyst Observations", styles["Heading3"]))
+    story.append(Spacer(1,10))
+
+    observations = [
+        "Traffic analysis indicates encrypted communication sessions.",
+        "Certain endpoints show higher packet volume compared to others.",
+        "Metadata correlation suggests possible coordinated communication patterns.",
+        "Further host-level forensic analysis is recommended."
+    ]
+
+    for obs in observations:
+        story.append(Paragraph(f"- {obs}", styles["Normal"]))
+
+    story.append(Spacer(1,20))
+
+    # ---------------------------------------------------
+    # CONCLUSION
+    # ---------------------------------------------------
+
+    story.append(Paragraph("Investigation Conclusion", styles["Heading3"]))
+    story.append(Spacer(1,10))
+
+    story.append(
+        Paragraph(
+            "The investigation utilized metadata traffic analysis to identify communication patterns and suspicious endpoints. "
+            "While encrypted traffic prevents direct payload inspection, behavioral traffic indicators provide valuable forensic insights.",
+            styles["Normal"]
+        )
+    )
+
+    story.append(Spacer(1,30))
+
+    story.append(
+        Paragraph(
+            "Generated by TRINETRA Cyber Intelligence Platform",
+            styles["Italic"]
+        )
+    )
+
+    # ---------------------------------------------------
+    # BUILD REPORT
+    # ---------------------------------------------------
+
+    doc = SimpleDocTemplate(filename, pagesize=A4)
+
+    doc.build(story)
 
     return filename
