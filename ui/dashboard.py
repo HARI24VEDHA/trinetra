@@ -1,10 +1,13 @@
 import streamlit as st
 import pandas as pd
 import networkx as nx
-import matplotlib.pyplot as plt
 import plotly.express as px
 import plotly.graph_objects as go
 
+
+# -------------------------
+# Packet Classification
+# -------------------------
 def classify_packet(size):
 
     if size < 200:
@@ -18,8 +21,12 @@ def classify_packet(size):
 
     else:
         return "Large Data"
-    
-def show_dashboard(df, flows, suspicious, locations, timeline, G):
+
+
+# -------------------------
+# Dashboard
+# -------------------------
+def show_dashboard(df, flows, suspicious, locations, timeline, G, message_hashes):
 
     tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs([
         "Traffic Analysis",
@@ -34,24 +41,37 @@ def show_dashboard(df, flows, suspicious, locations, timeline, G):
     # Traffic Analysis
     # -------------------------
     with tab1:
+
         st.subheader("Traffic Metadata")
 
-        # Add traffic classification
         df["traffic_type"] = df["length"].apply(classify_packet)
 
         display_df = df.rename(columns={
             "src_ip": "Source IP",
+            "src_port": "Source Port",
             "dst_ip": "Destination IP",
+            "dst_port": "Destination Port",
             "dst_domain": "Destination Domain",
             "protocol": "Protocol",
             "length": "Packet Size (Bytes)",
             "traffic_type": "Traffic Category",
-            "time": "Timestamp",
-            "flow": "Network Flow"
+            "time": "Timestamp"
         })
 
+        columns_to_show = [
+            "Source IP",
+            "Source Port",
+            "Destination IP",
+            "Destination Port",
+            "Protocol",
+            "Packet Size (Bytes)",
+            "Timestamp",
+            "Destination Domain",
+            "Traffic Category"
+        ]
+
         st.dataframe(
-            display_df.head(1000),
+            display_df[columns_to_show].head(1000),
             use_container_width=True
         )
 
@@ -101,48 +121,57 @@ def show_dashboard(df, flows, suspicious, locations, timeline, G):
     # Timeline
     # -------------------------
     with tab4:
+
         st.subheader("Traffic Timeline")
 
         if "time" not in df.columns:
             st.warning("Timestamp column missing.")
+
         else:
-            df["time"] = pd.to_datetime(df["time"], errors="coerce")
 
-            df = df.dropna(subset=["time"])
+            timeline_df = df.copy()
 
-            # Count packets per second
-            timeline_df = (
-                df.set_index("time")
-                  .resample("1S")
-                  .size()
-                  .reset_index(name="packets")
+            timeline_df["time"] = pd.to_datetime(
+                timeline_df["time"],
+                errors="coerce"
             )
 
-            fig = px.line(
-                timeline_df,
-                x="time",
-                y="packets",
-                title="Network Traffic Timeline"
-            )
+            timeline_df = timeline_df.dropna(subset=["time"])
 
-            fig.update_traces(line=dict(width=3))
+            if timeline_df.empty:
+                st.warning("No valid timestamps available for timeline.")
 
-            fig.update_layout(
-                xaxis_title="Time",
-                yaxis_title="Packets per Second",
-                template="plotly_dark"
-            )
+            else:
 
-            st.plotly_chart(fig, use_container_width=True)
+                timeline_df = (
+                    timeline_df
+                    .set_index("time")
+                    .resample("1S")
+                    .size()
+                    .reset_index(name="packets")
+                )
+
+                fig = px.line(
+                    timeline_df,
+                    x="time",
+                    y="packets",
+                    title="Network Traffic Timeline",
+                    template="plotly_dark"
+                )
+
+                st.plotly_chart(fig, use_container_width=True)
 
     # -------------------------
     # Communication Graph
     # -------------------------
     with tab5:
+
         st.subheader("Communication Network Graph")
+
         if G is None or len(G.nodes) == 0:
             st.warning("No graph data available.")
         else:
+
             pos = nx.spring_layout(G, k=0.5)
 
             edge_x = []
@@ -179,10 +208,7 @@ def show_dashboard(df, flows, suspicious, locations, timeline, G):
                 text=node_text,
                 textposition="top center",
                 hoverinfo='text',
-                marker=dict(
-                    size=12,
-                    color="#4da6ff"
-                )
+                marker=dict(size=12, color="#4da6ff")
             )
 
             fig = go.Figure(
@@ -195,34 +221,66 @@ def show_dashboard(df, flows, suspicious, locations, timeline, G):
             )
 
             st.plotly_chart(fig, use_container_width=True)
-            
+
     # -------------------------
     # Communication Flows
     # -------------------------
     with tab6:
+
         st.subheader("Communication Flows Analysis")
+
         if flows is None or flows.empty:
             st.warning("No communication flow data available.")
 
         else:
-            flow_df = flows.reset_index()
-            flow_df.columns = ["Communication Flow", "Packet Count"]
+
+            flow_df = flows.copy()
+
+            flow_df["Flow"] = (
+                flow_df["src_ip"] + ":" +
+                flow_df["src_port"].astype(str) +
+                " → " +
+                flow_df["dst_ip"] + ":" +
+                flow_df["dst_port"].astype(str)
+            )
+
             st.dataframe(
-                flow_df.sort_values("Packet Count", ascending=False),
+                flow_df[
+                    ["Flow", "protocol", "packet_count", "bytes"]
+                ].sort_values("packet_count", ascending=False),
                 use_container_width=True
             )
 
-            # Visualization
             st.subheader("Top Communication Flows")
 
             top_flows = flow_df.sort_values(
-                "Packet Count",
+                "packet_count",
                 ascending=False
             ).head(10)
 
-            st.bar_chart(
-                data=top_flows,
-                x="Communication Flow",
-                y="Packet Count"
+            fig = px.bar(
+                top_flows,
+                x="Flow",
+                y="packet_count",
+                title="Top Communication Flows",
+                template="plotly_dark"
             )
-            
+
+            st.plotly_chart(fig, use_container_width=True)
+
+    # -----------------------------
+    # Encrypted Message Hashes
+    # -----------------------------
+    st.divider()
+
+    st.subheader("Encrypted Message Hashes")
+
+    if message_hashes and len(message_hashes) > 0:
+
+        hash_df = pd.DataFrame(message_hashes)
+
+        st.dataframe(hash_df, use_container_width=True)
+
+    else:
+
+        st.info("No encrypted message payload hashes detected.")
