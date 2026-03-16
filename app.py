@@ -260,13 +260,4 @@ elif mode == "Live Capture":
         show_dashboard(df, flows, suspicious, locations, timeline, G, message_hashes)
 
         show_report_section(df, suspicious)
-    ssl_key_file = st.sidebar.file_uploader(
-    "Upload TLS Key Log (SSLKEYLOGFILE)",
-    type=["log","txt"]
-)
-
-tls_keys = None
-
-if ssl_key_file:
-    tls_keys = ssl_key_file.read().decode()
-    st.sidebar.success("TLS Key Log Loaded")
+    
