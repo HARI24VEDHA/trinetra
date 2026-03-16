@@ -4,6 +4,9 @@ networkx
 matplotlib
 scikit-learn
 geoip2
-reportlab 
+reportlab
+plotly
+scapy
+requests
 pyshark
 nest_asyncio
