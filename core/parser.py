@@ -1,66 +1,57 @@
-import subprocess
+from scapy.all import rdpcap
 import pandas as pd
-
-TSHARK_PATH = r"C:\Program Files\Wireshark\tshark.exe"
 
 
 def parse_pcap(file):
 
-    command = [
-        TSHARK_PATH,
-        "-r", file,
-        "-T", "fields",
-        "-e", "ip.src",
-        "-e", "ip.dst",
-        "-e", "frame.protocols",
-        "-e", "frame.len",
-        "-e", "frame.time_epoch",
-        "-E", "separator=,",
-        "-E", "occurrence=f"
-    ]
+    packets = rdpcap(file)
 
-    process = subprocess.Popen(
-        command,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE
-    )
+    rows = []
 
-    output, error = process.communicate()
-
-    lines = output.decode().splitlines()
-
-    data = []
-
-    for line in lines:
-
-        parts = line.split(",")
-
-        if len(parts) < 5:
-            continue
-
-        src, dst, protocol, length, time = parts[:5]
+    for pkt in packets:
 
         try:
-            length = int(length)
-        except:
-            length = 0
 
-        try:
-            time = float(time)
+            src_ip = None
+            dst_ip = None
+            src_port = None
+            dst_port = None
+            protocol = None
+
+            if pkt.haslayer("IP"):
+                src_ip = pkt["IP"].src
+                dst_ip = pkt["IP"].dst
+
+            if pkt.haslayer("TCP"):
+                src_port = pkt["TCP"].sport
+                dst_port = pkt["TCP"].dport
+                protocol = "TCP"
+
+            elif pkt.haslayer("UDP"):
+                src_port = pkt["UDP"].sport
+                dst_port = pkt["UDP"].dport
+                protocol = "UDP"
+
+            # Proper timestamp extraction
+            timestamp = float(pkt.time)
+
+            rows.append({
+                "time": timestamp,
+                "src_ip": src_ip,
+                "dst_ip": dst_ip,
+                "src_port": src_port,
+                "dst_port": dst_port,
+                "protocol": protocol,
+                "length": len(pkt),
+                "payload": bytes(pkt).hex()
+            })
+
         except:
             continue
 
-        data.append({
-            "src_ip": src,
-            "dst_ip": dst,
-            "protocol": protocol,
-            "length": length,
-            "time": time
-        })
+    df = pd.DataFrame(rows)
 
-    df = pd.DataFrame(
-        data,
-        columns=["src_ip", "dst_ip", "protocol", "length", "time"]
-    )
+    # Convert epoch timestamp to datetime
+    df["time"] = pd.to_datetime(df["time"], unit="s")
 
     return df
