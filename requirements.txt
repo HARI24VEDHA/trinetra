@@ -10,3 +10,4 @@ scapy
 requests
 pyshark
 nest_asyncio
+streamlit-oauth requests
