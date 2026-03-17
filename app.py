@@ -157,6 +157,8 @@ if mode == "Upload PCAP":
         with st.spinner("Analyzing PCAP Traffic..."):
 
             df = parse_pcap(temp.name)
+            df = df.replace(["", "None"], None)
+            df = df.dropna(subset=["src_ip", "dst_ip"])
 
             if df is None or df.empty:
                 st.warning("No packets extracted from PCAP.")

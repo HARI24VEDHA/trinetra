@@ -1,35 +1,65 @@
 import networkx as nx
-import pandas as pd
-
 
 def build_graph(df):
+
     G = nx.Graph()
 
+    # -------------------------
+    # Basic validation
+    # -------------------------
     if df is None or df.empty:
+        print("[Graph] Empty dataframe received")
         return G
 
-    required_columns = ["src_ip", "dst_ip"]
+    if "src_ip" not in df.columns or "dst_ip" not in df.columns:
+        print("[Graph] Required columns missing")
+        return G
 
-    for col in required_columns:
-        if col not in df.columns:
+    try:
+
+        # -------------------------
+        # Clean data
+        # -------------------------
+        clean_df = df.copy()
+
+        clean_df["src_ip"] = clean_df["src_ip"].astype(str)
+        clean_df["dst_ip"] = clean_df["dst_ip"].astype(str)
+
+        # Remove invalid values
+        clean_df = clean_df[
+            (clean_df["src_ip"] != "None") &
+            (clean_df["dst_ip"] != "None") &
+            (clean_df["src_ip"] != "") &
+            (clean_df["dst_ip"] != "")
+        ]
+
+        # Drop NaN values
+        clean_df = clean_df.dropna(subset=["src_ip", "dst_ip"])
+
+        # -------------------------
+        # Check after cleaning
+        # -------------------------
+        if clean_df.empty:
+            print("[Graph] No valid IP data after cleaning")
             return G
 
-    for _, row in df.iterrows():
-        src_ip = row["src_ip"]
-        dst_ip = row["dst_ip"]
+        # -------------------------
+        # Build graph safely
+        # -------------------------
+        for _, row in clean_df.iterrows():
 
-        if pd.isna(src_ip) or pd.isna(dst_ip):
-            continue
+            try:
+                src = row["src_ip"]
+                dst = row["dst_ip"]
 
-        if src_ip is None or dst_ip is None:
-            continue
+                if src and dst:
+                    G.add_edge(str(src), str(dst))
 
-        src_ip = str(src_ip).strip()
-        dst_ip = str(dst_ip).strip()
+            except Exception:
+                # Skip problematic rows silently
+                continue
 
-        if src_ip == "" or dst_ip == "":
-            continue
-
-        G.add_edge(src_ip, dst_ip)
+    except Exception as e:
+        print(f"[Graph Error] {e}")
 
     return G
