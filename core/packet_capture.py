@@ -1,38 +1,53 @@
 from scapy.all import sniff
 import pandas as pd
-import time
-from datetime import datetime
 
-packets = []
 
-def process_packet(packet):
+def capture_packets(interface, packet_count):
 
-    try:
-        if packet.haslayer("IP"):
+    packets = sniff(iface=interface, count=packet_count)
 
-            packets.append({
-               "time": datetime.now(),   # ADD TIMESTAMP
-                "src_ip": packet["IP"].src,
-                "dst_ip": packet["IP"].dst,
-                "protocol": packet["IP"].proto,
-                "length": len(packet)
+    rows = []
+
+    for pkt in packets:
+
+        try:
+
+            src_ip = None
+            dst_ip = None
+            src_port = None
+            dst_port = None
+            protocol = None
+
+            if pkt.haslayer("IP"):
+                src_ip = pkt["IP"].src
+                dst_ip = pkt["IP"].dst
+
+            if pkt.haslayer("TCP"):
+                src_port = pkt["TCP"].sport
+                dst_port = pkt["TCP"].dport
+                protocol = "TCP"
+
+            elif pkt.haslayer("UDP"):
+                src_port = pkt["UDP"].sport
+                dst_port = pkt["UDP"].dport
+                protocol = "UDP"
+
+            rows.append({
+                "time": pkt.time,
+                "src_ip": src_ip,
+                "dst_ip": dst_ip,
+                "src_port": src_port,
+                "dst_port": dst_port,
+                "protocol": protocol,
+                "length": len(pkt),
+                "payload": bytes(pkt).hex()
             })
 
-    except:
-        pass
+        except:
+            continue
 
+    df = pd.DataFrame(rows)
 
-def capture_packets(interface="Wi-Fi", count=200):
-
-    packets.clear()
-
-    sniff(
-        iface=interface,
-        prn=process_packet,
-        count=count,
-        store=False
-    )
-
-    df = pd.DataFrame(packets)
+    df["time"] = pd.to_datetime(df["time"], unit="s", errors="coerce")
 
     return df
