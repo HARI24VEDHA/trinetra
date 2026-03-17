@@ -1,0 +1,32 @@
+[
+    {
+        "investigation_id": "dd696c68-cd37-4767-a41a-e6d1a27df7eb",
+        "file_hash": "a3d323b9ba143337e77fc07c0fe9efe155b238939002811694d60e39fc99a70d",
+        "file_name": "telegram_vpn.pcap",
+        "source_name": "C:\\Users\\tej30\\AppData\\Local\\Temp\\tmpxzfv9vox",
+        "timestamp": "2026-03-17T09:19:25.466427",
+        "suspicious_count": 1,
+        "vpn_detected": true,
+        "folder_path": "cache\\investigations\\dd696c68-cd37-4767-a41a-e6d1a27df7eb"
+    },
+    {
+        "investigation_id": "4ad63ee1-afcc-4076-b01c-bcd4871437e6",
+        "file_hash": "9a325656aa918abd78ac5ff07406bc6c77a5d2fd0aa5d6e2b95bcb4755b72361",
+        "file_name": "tor_browsing.pcap",
+        "source_name": "C:\\Users\\tej30\\AppData\\Local\\Temp\\tmphql2ih1i",
+        "timestamp": "2026-03-17T09:21:38.473001",
+        "suspicious_count": 1,
+        "vpn_detected": true,
+        "folder_path": "cache\\investigations\\4ad63ee1-afcc-4076-b01c-bcd4871437e6"
+    },
+    {
+        "investigation_id": "d1819381-fa50-4a5e-b687-7901fc1f26cf",
+        "file_hash": "28ef1e3a817cd1d2c3c7411c949c1b1c04a860c714f054cac6541128360410e8",
+        "file_name": "telegram_normal.pcap",
+        "source_name": "C:\\Users\\tej30\\AppData\\Local\\Temp\\tmpxuaaj8sq",
+        "timestamp": "2026-03-17T09:24:42.395168",
+        "suspicious_count": 1,
+        "vpn_detected": true,
+        "folder_path": "cache\\investigations\\d1819381-fa50-4a5e-b687-7901fc1f26cf"
+    }
+]
